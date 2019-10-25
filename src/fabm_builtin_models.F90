@@ -552,13 +552,13 @@ module fabm_builtin_models
       real(rk) :: value
 
       ! Initialize sum to starting value (typically zero).
-      _CONCURRENT_LOOP_BEGIN_
+      _LOOP_BEGIN_
          _ADD_(self%id_output, self%offset)
       _LOOP_END_
 
       ! Enumerate components included in the sum, and add their contributions.
       do i = 1, size(self%sources)
-         _CONCURRENT_LOOP_BEGIN_
+         _LOOP_BEGIN_
             _GET_(self%sources(i)%id, value)
             _ADD_(self%id_output, self%sources(i)%weight * value)
          _LOOP_END_
@@ -577,7 +577,7 @@ module fabm_builtin_models
 
       real(rk) :: value
 
-      _CONCURRENT_LOOP_BEGIN_
+      _LOOP_BEGIN_
          _GET_(self%id_source,value)
          _SET_DIAGNOSTIC_(self%id_result, self%offset + self%weight*value)
       _LOOP_END_
@@ -605,7 +605,7 @@ module fabm_builtin_models
 
       real(rk) :: value
 
-      _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
+      _HORIZONTAL_LOOP_BEGIN_
          _GET_HORIZONTAL_(self%id_source, value)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_result, self%offset + self%weight * value)
       _HORIZONTAL_LOOP_END_
@@ -756,12 +756,12 @@ module fabm_builtin_models
       integer  :: i
       real(rk) :: value
 
-      _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
+      _HORIZONTAL_LOOP_BEGIN_
          _ADD_HORIZONTAL_(self%id_output, self%offset)
       _HORIZONTAL_LOOP_END_
 
       do i = 1, size(self%sources)
-         _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
+         _HORIZONTAL_LOOP_BEGIN_
             _GET_HORIZONTAL_(self%sources(i)%id, value)
             _ADD_HORIZONTAL_(self%id_output, self%sources(i)%weight * value)
          _HORIZONTAL_LOOP_END_
@@ -948,7 +948,7 @@ module fabm_builtin_models
 
       real(rk) :: flux
 
-      _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
+      _HORIZONTAL_LOOP_BEGIN_
          _GET_HORIZONTAL_(self%id_flux,flux)
          _ADD_HORIZONTAL_(self%id_target_flux, self%scale_factor * flux)
       _HORIZONTAL_LOOP_END_

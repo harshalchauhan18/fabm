@@ -96,12 +96,13 @@
 #ifdef _FABM_VECTORIZED_DIMENSION_INDEX_
 !  Interior procedures operate in 1D
 !  Interior slices MUST be 1D arrays; horizontal slices may be scalars or 1D arrays
-#  define _LOOP_END_ end do
+#  define _LOOP_END_ end if;end do
+#  define  _CONCURRENT_LOOP_END_ end do
 #  ifdef _HORIZONTAL_IS_VECTORIZED_
 !    Horizontal slices are 1D arrays
 !    For instance, model with i,j,k [MOM,NEMO] or i,j or i,k [FVCOM], or i; vectorized along i or j
 #    define _DECLARE_INTERIOR_INDICES_ integer :: _I_,_J_
-#    define _LOOP_BEGIN_EX_(env) do _I_=1,env%n;_J_=_I_
+#    define _LOOP_BEGIN_EX_(env) do _I_=1,env%n;if (env%mask(_I_)) then;_J_=_I_;
 #    define _CONCURRENT_LOOP_BEGIN_EX_(env) _DO_CONCURRENT_(_I_,1,env%n);_J_=_I_
 #  else
 !    Horizontal slices are scalars
@@ -134,9 +135,10 @@
 !  Horizontal procedures operate in 1D
 !  Horizontal and interior slices MUST be 1D. Use same index for horizontal and interior (_I_=_J_)
 #  define _DECLARE_HORIZONTAL_INDICES_ integer :: _I_,_J_
-#  define _HORIZONTAL_LOOP_BEGIN_EX_(env) do _J_=1,env%n;_I_=_J_
+#  define _HORIZONTAL_LOOP_BEGIN_EX_(env) do _J_=1,env%n;if (env%mask(_J_)) then;_I_=_J_
 #  define _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(env) _DO_CONCURRENT_(_J_,1,env%n);_I_=_J_
-#  define _HORIZONTAL_LOOP_END_ end do
+#  define _HORIZONTAL_LOOP_END_ end if;end do
+#  define _CONCURRENT_HORIZONTAL_LOOP_END_ end do
 #else
 !  Horizontal procedures operate in 0D
 !  Horizontal slices MUST be scalars; interior slices can be scalars or 1D arrays
@@ -162,6 +164,7 @@
 !  Interior slices MUST be 1D arrays; horizontal slices may be 0D or 1D
 !  Applies to all models with depth dimension. For instance, model with i,j,k [MOM,NEMO], i,k [FVCOM], or k [GOTM]
 #  define _VERTICAL_LOOP_END_ end do
+#  define _CONCURRENT_VERTICAL_LOOP_END_ end do
 #  define _VERTICAL_LOOP_EXIT_ exit
 #  ifdef _FABM_VERTICAL_BOTTOM_TO_SURFACE_
 #    define _DOWNWARD_LOOP_BEGIN_ do _I_=_N_,1,-1

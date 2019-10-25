@@ -2494,9 +2494,7 @@ subroutine create_cache(self, cache, cache_type)
       n_mod = mod(n, array_block_size)
       if (n_mod /= 0) n = n - n_mod + array_block_size
 #  ifdef _HAS_MASK_
-      allocate(cache%mask(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
-      allocate(cache%ipack(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
-      allocate(cache%iunpack(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
+      allocate(cache%mask(n))
 #  endif
 #else
       n = 1
@@ -2523,9 +2521,7 @@ subroutine create_cache(self, cache, cache_type)
       n_mod = mod(n, array_block_size)
       if (n_mod /= 0) n = n - n_mod + array_block_size
 #  ifdef _HAS_MASK_
-      allocate(cache%mask(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
-      allocate(cache%ipack(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
-      allocate(cache%iunpack(self%domain_size(_FABM_VECTORIZED_DIMENSION_INDEX_)))
+      allocate(cache%mask(n))
 #  endif
 #else
       n = 1
@@ -2552,9 +2548,7 @@ subroutine create_cache(self, cache, cache_type)
       n_mod = mod(n, array_block_size)
       if (n_mod /= 0) n = n - n_mod + array_block_size
 #  ifdef _HAS_MASK_
-      allocate(cache%mask(self%domain_size(_FABM_DEPTH_DIMENSION_INDEX_)))
-      allocate(cache%ipack(self%domain_size(_FABM_DEPTH_DIMENSION_INDEX_)))
-      allocate(cache%iunpack(self%domain_size(_FABM_DEPTH_DIMENSION_INDEX_)))
+      allocate(cache%mask(n))
 #  endif
 #else
        n = 1
@@ -2639,22 +2633,10 @@ subroutine begin_interior_task(self,task,cache _ARGUMENTS_INTERIOR_IN_)
       cache%mask _INDEX_SLICE_ = _IS_UNMASKED_(self%mask _INDEX_GLOBAL_INTERIOR_(_I_))
 #    endif
    end do
-   i = 0
-   do _I_=_START_,_STOP_
-      if (cache%mask(_I_)) then
-          i = i + 1
-          cache%ipack(i) = _I_
-          cache%iunpack(_I_) = i
-      else
-          cache%iunpack(_I_) = 0
-      end if
-   end do
-   _N_ = i
-#  else
-   _N_ = _STOP_ - _START_ + 1
 #  endif
+   _N_ = _STOP_ - _START_ + 1
 #endif
-   
+
    do i = 1, size(task%load)
       j = task%load(i)
       if (j /= 0) then
@@ -2679,7 +2661,7 @@ subroutine begin_interior_task(self,task,cache _ARGUMENTS_INTERIOR_IN_)
       if (j == prefill_constant) then
          _CONCURRENT_LOOP_BEGIN_
             cache%write _INDEX_SLICE_PLUS_1_(i) = self%write_cache_fill_value(i)
-         _LOOP_END_
+         _CONCURRENT_LOOP_END_
       elseif (j /= prefill_none) then
          _PACK_GLOBAL_(self%catalog%interior(j)%p, cache%write, i, cache)
       end if
@@ -2700,20 +2682,8 @@ subroutine begin_horizontal_task(self,task,cache _ARGUMENTS_HORIZONTAL_IN_)
    _DO_CONCURRENT_(_J_,_START_,_STOP_)
       cache%mask _INDEX_HORIZONTAL_SLICE_ = _IS_UNMASKED_(self%mask_hz _INDEX_GLOBAL_HORIZONTAL_(_J_))
    end do
-   i = 0
-   do _J_=_START_,_STOP_
-      if (cache%mask(_J_)) then
-          i = i + 1
-          cache%ipack(i) = _J_
-          cache%iunpack(_J_) = i
-      else
-          cache%iunpack(_J_) = 0
-      end if
-   end do
-   _N_ = i
-#  else
-   _N_ = _STOP_ - _START_ + 1
 #  endif
+   _N_ = _STOP_ - _START_ + 1
 #endif
 
    do i = 1, size(task%load_hz)
@@ -2731,7 +2701,7 @@ subroutine begin_horizontal_task(self,task,cache _ARGUMENTS_HORIZONTAL_IN_)
       if (task%prefill_hz(i) == prefill_constant) then
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
             cache%write_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(i) = self%write_cache_hz_fill_value(i)
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
       elseif (task%prefill_hz(i) /= prefill_none) then
          _HORIZONTAL_PACK_GLOBAL_(self%catalog%horizontal(task%prefill_hz(i))%p, cache%write_hz, i, cache)
       end if
@@ -2764,12 +2734,12 @@ subroutine load_surface_data(self,task,cache _ARGUMENTS_HORIZONTAL_IN_)
       if (j /= 0) then
 #ifdef _HORIZONTAL_IS_VECTORIZED_
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
-#  ifdef _HAS_MASK_
-            cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(j)%p _INDEX_GLOBAL_INTERIOR_(cache%ipack(_J_))
+#  ifdef _HAS_MASK_FOO
+            if (cache%mask _INDEX_SLICE_) self%catalog%interior(j)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1)
 #  else
             cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(j)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1)
 #  endif
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
 #elif defined(_INTERIOR_IS_VECTORIZED_)
          cache%read(1,i) = self%catalog%interior(j)%p _INDEX_LOCATION_
 #else
@@ -2801,18 +2771,14 @@ subroutine load_bottom_data(self,task,cache _ARGUMENTS_HORIZONTAL_IN_)
 #ifdef _HORIZONTAL_IS_VECTORIZED_
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_
 #  if _FABM_BOTTOM_INDEX_==-1
-#    ifdef _HAS_MASK_
-            _VERTICAL_ITERATOR_ = self%bottom_indices _INDEX_GLOBAL_HORIZONTAL_(cache%ipack(_J_))
-#    else
             _VERTICAL_ITERATOR_ = self%bottom_indices _INDEX_GLOBAL_HORIZONTAL_(_START_+_J_-1)
-#    endif
 #  endif
 #  ifdef _HAS_MASK_
-            cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(k)%p _INDEX_GLOBAL_INTERIOR_(cache%ipack(_J_))
+            if (cache%mask _INDEX_SLICE_) cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(k)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1)
 #  else
             cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(k)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1)
 #  endif
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
 #elif defined(_INTERIOR_IS_VECTORIZED_)
 #  if _FABM_BOTTOM_INDEX_==-1
          _VERTICAL_ITERATOR_ = self%bottom_indices _INDEX_HORIZONTAL_LOCATION_
@@ -2846,35 +2812,17 @@ subroutine begin_vertical_task(self,task,cache _ARGUMENTS_VERTICAL_IN_)
       cache%mask _INDEX_SLICE_ = _IS_UNMASKED_(self%mask _INDEX_GLOBAL_VERTICAL_(_I_))
 #    endif
    end do
-   i = 0
-   do _I_=_VERTICAL_START_,_VERTICAL_STOP_
-      if (cache%mask(_I_)) then
-          i = i + 1
-          cache%ipack(i) = _I_
-          cache%iunpack(_I_) = i
-      else
-          cache%iunpack(_I_) = 0
-      end if
-    end do
-    _N_ = i
-#  else
-   _N_ = _VERTICAL_STOP_ - _VERTICAL_START_ + 1
 #  endif
+   _N_ = _VERTICAL_STOP_ - _VERTICAL_START_ + 1
 #endif
 
    do i=1, size(task%load)
       j = task%load(i)
       if (j /= 0) then
 #ifdef _FABM_DEPTH_DIMENSION_INDEX_
-         _CONCURRENT_VERTICAL_LOOP_BEGIN_
-#  ifdef _HAS_MASK_
-            cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(j)%p _INDEX_GLOBAL_VERTICAL_(cache%ipack(_I_))
-#  else
-            cache%read _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(j)%p _INDEX_GLOBAL_VERTICAL_(_VERTICAL_START_+_I_-1)
-#  endif
-         _VERTICAL_LOOP_END_
+         cache%read(1:_N_, i) = self%catalog%interior(j)%p _INDEX_GLOBAL_VERTICAL_(_VERTICAL_START_:_VERTICAL_STOP_)
 #elif defined(_INTERIOR_IS_VECTORIZED_)
-         cache%read(1,i) = self%catalog%interior(j)%p _INDEX_LOCATION_
+         cache%read(1, i) = self%catalog%interior(j)%p _INDEX_LOCATION_
 #else
          cache%read(i) = self%catalog%interior(j)%p _INDEX_LOCATION_
 #endif
@@ -2906,13 +2854,7 @@ subroutine begin_vertical_task(self,task,cache _ARGUMENTS_VERTICAL_IN_)
 #endif
       elseif (task%prefill(i) /= prefill_none) then
 #ifdef _FABM_DEPTH_DIMENSION_INDEX_
-         _CONCURRENT_VERTICAL_LOOP_BEGIN_
-#  ifdef _HAS_MASK_
-            cache%write _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(task%prefill(i))%p _INDEX_GLOBAL_VERTICAL_(cache%ipack(_I_))
-#  else
-            cache%write _INDEX_SLICE_PLUS_1_(i) = self%catalog%interior(task%prefill(i))%p _INDEX_GLOBAL_VERTICAL_(_VERTICAL_START_+_I_-1)
-#  endif
-         _VERTICAL_LOOP_END_
+         cache%write(1:_N_, i) = self%catalog%interior(task%prefill(i))%p _INDEX_GLOBAL_VERTICAL_(_VERTICAL_START_:_VERTICAL_STOP_)
 #elif defined(_INTERIOR_IS_VECTORIZED_)
          cache%write(1, i) = self%catalog%interior(task%prefill(i))%p _INDEX_LOCATION_
 #else
@@ -3157,7 +3099,7 @@ end subroutine end_vertical_task
       read_index = self%state_variables(ivar)%target%read_indices%value
       _CONCURRENT_LOOP_BEGIN_EX_(self%cache_int)
          self%cache_int%read _INDEX_SLICE_PLUS_1_(read_index) = self%state_variables(ivar)%initial_value
-      _LOOP_END_
+      _CONCURRENT_LOOP_END_
    end do
 
    ! Allow biogeochemical models to initialize their interior state.
@@ -3213,7 +3155,7 @@ end subroutine end_vertical_task
       read_index = self%bottom_state_variables(ivar)%target%read_indices%value
       _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(self%cache_hz)
          self%cache_hz%read_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(read_index) = self%bottom_state_variables(ivar)%initial_value
-      _HORIZONTAL_LOOP_END_
+      _CONCURRENT_HORIZONTAL_LOOP_END_
    end do
 
    ! Allow biogeochemical models to initialize their bottom state.
@@ -3269,7 +3211,7 @@ end subroutine end_vertical_task
       read_index = self%surface_state_variables(ivar)%target%read_indices%value
       _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(self%cache_hz)
          self%cache_hz%read_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(read_index) = self%surface_state_variables(ivar)%initial_value
-      _HORIZONTAL_LOOP_END_
+      _CONCURRENT_HORIZONTAL_LOOP_END_
    end do
 
    ! Allow biogeochemical models to initialize their surface state.
@@ -3383,7 +3325,7 @@ end subroutine end_vertical_task
          k = call_node%copy_commands_int(i)%write_index
          _CONCURRENT_LOOP_BEGIN_EX_(self%cache_int)
             self%cache_int%read _INDEX_SLICE_PLUS_1_(j) = self%cache_int%write _INDEX_SLICE_PLUS_1_(k)
-         _LOOP_END_
+         _CONCURRENT_LOOP_END_
       end do
 
       call_node => call_node%next
@@ -3462,7 +3404,7 @@ end subroutine end_vertical_task
       maximum = self%state_variables(ivar)%maximum
 
       if (repair) then
-         _CONCURRENT_LOOP_BEGIN_EX_(self%cache_int)
+         _LOOP_BEGIN_EX_(self%cache_int)
             value = self%cache_int%read _INDEX_SLICE_PLUS_1_(read_index)
             self%cache_int%read _INDEX_SLICE_PLUS_1_(read_index) = max(minimum,min(maximum,value))
          _LOOP_END_
@@ -3664,7 +3606,7 @@ subroutine internal_check_horizontal_state(self,job _ARGUMENTS_HORIZONTAL_IN_,fl
 #endif
 
 #ifdef _HORIZONTAL_IS_VECTORIZED_
-#  ifdef _HAS_MASK_
+#  ifdef _HAS_MASK_FOO
          _DO_CONCURRENT_(_J_,_START_,_STOP_)
             if (self%cache_hz%iunpack(_J_)/=0) then
                self%catalog%interior(self%state_variables(ivar)%target%catalog_index)%p _INDEX_GLOBAL_INTERIOR_(_J_) = self%cache_hz%read(self%cache_hz%iunpack(_J_),read_index)
@@ -3675,7 +3617,7 @@ subroutine internal_check_horizontal_state(self,job _ARGUMENTS_HORIZONTAL_IN_,fl
 #  else
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(self%cache_hz)
             self%catalog%interior(self%state_variables(ivar)%target%catalog_index)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1) = self%cache_hz%read _INDEX_SLICE_PLUS_1_(read_index)
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
 #  endif
 #elif defined(_INTERIOR_IS_VECTORIZED_)
          self%catalog%interior(self%state_variables(ivar)%target%catalog_index)%p _INDEX_LOCATION_ = self%cache_hz%read(1,read_index)
@@ -3686,7 +3628,7 @@ subroutine internal_check_horizontal_state(self,job _ARGUMENTS_HORIZONTAL_IN_,fl
 #if _FABM_BOTTOM_INDEX_==-1&&defined(_HORIZONTAL_IS_VECTORIZED_)
       else
          ! Special case for bottom if vertical index of bottom point is variable.
-#  ifdef _HAS_MASK_
+#  ifdef _HAS_MASK_FOO
          _DO_CONCURRENT_(_J_,_START_,_STOP_)
             _VERTICAL_ITERATOR_ = self%bottom_indices _INDEX_GLOBAL_HORIZONTAL_(_J_)
             if (self%cache_hz%iunpack(_J_)/=0) then
@@ -3699,7 +3641,7 @@ subroutine internal_check_horizontal_state(self,job _ARGUMENTS_HORIZONTAL_IN_,fl
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(self%cache_hz)
             _VERTICAL_ITERATOR_ = self%bottom_indices _INDEX_GLOBAL_HORIZONTAL_(_START_+_J_-1)
             self%catalog%interior(self%state_variables(ivar)%target%catalog_index)%p _INDEX_GLOBAL_INTERIOR_(_START_+_I_-1) = self%cache_hz%read _INDEX_SLICE_PLUS_1_(read_index)
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
 #  endif
       end if
 #endif
@@ -3865,7 +3807,7 @@ end subroutine internal_check_horizontal_state
          k = call_node%copy_commands_hz(i)%write_index
          _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(self%cache_hz)
             self%cache_hz%read_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(j) = self%cache_hz%write_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(k)
-         _HORIZONTAL_LOOP_END_
+         _CONCURRENT_HORIZONTAL_LOOP_END_
       end do
 
       call_node => call_node%next
@@ -4254,7 +4196,7 @@ end subroutine internal_check_horizontal_state
             k = call_node%copy_commands_int(i)%write_index
             _CONCURRENT_LOOP_BEGIN_EX_(cache)
                cache%read _INDEX_SLICE_PLUS_1_(j) = cache%write _INDEX_SLICE_PLUS_1_(k)
-            _LOOP_END_
+            _CONCURRENT_LOOP_END_
          end do
 
          ! Move to next model
@@ -4301,7 +4243,7 @@ end subroutine internal_check_horizontal_state
             k = call_node%copy_commands_hz(i)%write_index
             _CONCURRENT_HORIZONTAL_LOOP_BEGIN_EX_(cache)
                cache%read_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(j) = cache%write_hz _INDEX_HORIZONTAL_SLICE_PLUS_1_(k)
-            _HORIZONTAL_LOOP_END_
+            _CONCURRENT_HORIZONTAL_LOOP_END_
          end do
 
          call_node => call_node%next
